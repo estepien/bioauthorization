@@ -1,0 +1,64 @@
+@startuml
+
+title Bioauthorization draft
+
+actor "End user" as user
+participant "User phone" as up
+participant "Domain service " as ds
+participant "IDP" as idp
+participant "BioAuthorization\nProxy Server" as proxy
+
+==Registration process==
+user --> ds+ : Wants to register bio\nauthorization to service
+    ds -> idp+ : enable two factor\nauthorization: bio
+        idp -> proxy+ : start user registration process
+            proxy -> proxy : generate new **totp seed**, **userBioId**,\nlink idpUserId with userBioId
+        return **totp seed** and **userBioId**
+        idp --> user : show **qrcode** with link to\napp, **totp seed** and **userBioId**
+        user --> up** : scan **qrcode** with phone
+        alt If user don't\nhave app on device
+            up -> up : install app\nfrom store
+            ...
+        end
+        up -> up+ : run bioauthorization app
+            up -> up : generate RSA Keys, save keys and seed\nin fingerprint store, generate totp
+            up -> proxy+ : send **rsa public key**,\n**userBioId** with **totp**\nand **push notification data**
+                proxy -> proxy : validate totp, save rsa key\nand **push notification data**
+                proxy -> idp : notify about successful registration
+            return success
+        deactivate up
+    idp -> ds : redirect user
+    deactivate idp
+ds --> user : show successful enabled
+deactivate ds
+...
+
+==Bio authorization process==
+user --> ds+ : Wants to login
+    ds -> idp+ : redirect to login
+        idp -> idp : checks authorization method
+        alt if bioauthorization is enabled
+        idp -> proxy+ : perform bioauthorization
+            proxy -> proxy : generate totp, encipher totp\nwith public rsa key of user
+            proxy -> up : push notification with cipher data
+            deactivate proxy
+        user --> up+ : responds on notification
+            user --> up : performs fingerprint authorization
+            up -> up : retrieve data from fingerprint store,\ngenerate totp
+            up -> proxy+ : send totp, userBioId
+            deactivate up
+            proxy -> proxy: encipher with rsa public key,\nvalidate totp
+            alt validation failed
+                proxy -> idp : failure
+                idp --> user : show verification failure
+            else validation successful
+                proxy -> idp : success
+                idp --> ds : redirect successful
+            deactivate idp
+                note over ds
+                    User can perform action like always
+                end note
+            deactivate ds
+    end
+end
+@enduml
