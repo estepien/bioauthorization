@@ -11,6 +11,7 @@ participant "BioAuthorization\nProxy Server" as proxy
 ==Registration process==
 user --> ds+ : Wants to register bio\nauthorization to service
     ds -> idp+ : enable two factor\nauthorization: bio
+deactivate ds
         idp -> proxy+ : start user registration process
             proxy -> proxy : generate new **totp seed**, **userBioId**,\nlink idpUserId with userBioId
         return **totp seed** and **userBioId**
@@ -27,7 +28,7 @@ user --> ds+ : Wants to register bio\nauthorization to service
                 proxy -> idp : notify about successful registration
             return success
         deactivate up
-    idp -> ds : redirect user
+    idp -> ds+ : redirect user
     deactivate idp
 ds --> user : show successful enabled
 deactivate ds
