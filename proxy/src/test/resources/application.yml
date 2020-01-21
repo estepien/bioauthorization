@@ -1,0 +1,13 @@
+spring:
+  application:
+    name: 'bioauthorization-proxy'
+
+  data:
+    mongodb:
+      host: localhost
+      port: 27017
+      authentication-database: admin
+      password: example
+      username: root
+      auto-index-creation: true
+      database: proxy

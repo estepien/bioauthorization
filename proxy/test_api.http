@@ -1,0 +1,6 @@
+POST http://localhost:8080/register?userId=Test
+Accept: */*
+Cache-Control: no-cache
+
+###
+
