@@ -1,6 +1,26 @@
-POST http://localhost:8080/register?userId=Test
+POST http://localhost:8080/r?userId=Test
 Accept: */*
 Cache-Control: no-cache
 
 ###
 
+PUT http://localhost:8080/r/Test/p
+Content-Type: multipart/form-data; boundary=WebAppBoundary
+
+--WebAppBoundary
+Content-Disposition: form-data; name="pk"; filename="input.txt"
+
+test
+
+--WebAppBoundary
+Content-Disposition: form-data;  name="additional"
+Content-Type: application/json; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+{
+  "totpValue": "demoData",
+  "pushNotificationData": "demoData"
+}
+--WebAppBoundary--
+
+###
