@@ -22,6 +22,10 @@ public class User {
 
     public String seed;
 
+    public byte[] rsaKey;
+
+    private String pushNotificationData;
+
     @CreatedDate
     public Date createdDate;
 

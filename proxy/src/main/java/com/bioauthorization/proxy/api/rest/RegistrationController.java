@@ -10,17 +10,16 @@ import org.springframework.web.multipart.MultipartFile;
 
 @Slf4j
 @RestController
-public class Registration {
+public class RegistrationController {
     private RegistrationService registrationService;
 
-    public Registration(RegistrationService registrationService) {
+    public RegistrationController(RegistrationService registrationService) {
         this.registrationService = registrationService;
     }
 
     @PostMapping(value = "/r", produces = MediaType.APPLICATION_JSON_VALUE)
     public RegistrationResponse startRegistration(@RequestParam String userId) {
         log.info("Registration request occurred for IDP user with id: " + userId);
-
 
         return registrationService.registerUser(userId);
     }
