@@ -22,9 +22,15 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.shaded.com.fasterxml.jackson.databind.ObjectMapper;
 
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
-import java.security.NoSuchAlgorithmException;
+import javax.crypto.BadPaddingException;
+import javax.crypto.Cipher;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.NoSuchPaddingException;
+import java.security.*;
+import java.security.interfaces.RSAPublicKey;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.X509EncodedKeySpec;
+import java.util.Base64;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -76,13 +82,19 @@ class RegistrationControllerE2eTest {
         //Phone behaviour
         KeyPair keys = generateKeys();
         Totp totp = new Totp(response.getTotpSeed());
-        AdditionalRegistrationData data = new AdditionalRegistrationData(totp.now(), TEST_PUSH_NOTIFICATION_DATA);
+
+        AdditionalRegistrationData data = new AdditionalRegistrationData(
+                Base64.getEncoder().encodeToString(
+                        encrypt(totp.now(), keys.getPrivate())
+                ),
+                TEST_PUSH_NOTIFICATION_DATA
+        );
 
         MockMultipartFile dataJsonPart = new MockMultipartFile("additional", null, MediaType.APPLICATION_JSON_VALUE, om.writeValueAsBytes(data));
 
         mvc.perform(
                 multipart("/r/{userId}/p", response.getUserBioId())
-                        .file("pk", keys.getPublic().getEncoded())
+                        .file("pk", Base64.getEncoder().encode(keys.getPublic().getEncoded()))
                         .file(dataJsonPart)
                         .with(request -> {
                             request.setMethod("PUT");
@@ -98,15 +110,25 @@ class RegistrationControllerE2eTest {
         User resultUser = optionalUser.get();
         assertAll("databaseChecks",
                 () -> assertEquals(resultUser.getPushNotificationData(), TEST_PUSH_NOTIFICATION_DATA),
-//                () -> assertEquals(resultUser.getRsaKey(), keys.getPublic().getEncoded()),
+                () -> assertEquals(((RSAPublicKey) retrievePubKeyFromBytes(resultUser.getRsaKey())).getPublicExponent(), ((RSAPublicKey) keys.getPublic()).getPublicExponent()),
                 () -> assertEquals(resultUser.getSeed(), response.getTotpSeed())
         );
+    }
+
+    private PublicKey retrievePubKeyFromBytes(byte[] rsaKey) throws NoSuchAlgorithmException, InvalidKeySpecException {
+        return KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(rsaKey));
     }
 
     private KeyPair generateKeys() throws NoSuchAlgorithmException {
         KeyPairGenerator kgp = KeyPairGenerator.getInstance("RSA");
         kgp.initialize(2048);
         return kgp.generateKeyPair();
+    }
+
+    public static byte[] encrypt(String data, Key privateKey) throws BadPaddingException, IllegalBlockSizeException, InvalidKeyException, NoSuchPaddingException, NoSuchAlgorithmException {
+        Cipher cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
+        cipher.init(Cipher.ENCRYPT_MODE, privateKey);
+        return cipher.doFinal(data.getBytes());
     }
 
     @AfterEach

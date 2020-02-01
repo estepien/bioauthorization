@@ -12,12 +12,18 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.multipart.MultipartFile;
 
+import javax.crypto.BadPaddingException;
+import javax.crypto.Cipher;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.NoSuchPaddingException;
 import java.io.IOException;
+import java.security.InvalidKeyException;
 import java.security.KeyFactory;
 import java.security.NoSuchAlgorithmException;
 import java.security.PublicKey;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
+import java.util.Base64;
 import java.util.Optional;
 
 @Slf4j
@@ -51,9 +57,11 @@ public class BaseRegistrationService implements RegistrationService {
 
         optionalUser.ifPresentOrElse(
                 user -> {
-                    Totp totp = new Totp(user.getSeed());
-                    if (!totp.verify(data.getTotpValue())) throw new HttpClientErrorException(HttpStatus.UNAUTHORIZED);
-                    user.setRsaKey(checkRSAPublicKeyAndRetrieve(publicKey));
+                    PublicKey userPublicKey = checkRSAPublicKeyAndRetrieve(publicKey);
+
+                    validateTotpValue(user.getSeed(), userPublicKey, data.getTotpValue());
+
+                    user.setRsaKey(userPublicKey.getEncoded());
                     user.setPushNotificationData(data.getPushNotificationData());
 
                     userRepository.save(user);
@@ -65,17 +73,33 @@ public class BaseRegistrationService implements RegistrationService {
         return "ok";
     }
 
-    private byte[] checkRSAPublicKeyAndRetrieve(MultipartFile publicKeyData) {
-        byte [] rsaKeybytes;
+    private void validateTotpValue(String seed, PublicKey userPublicKey, String totpValue) {
+        String totpDecryptedValue = decrypt(totpValue, userPublicKey);
+
+        Totp totp = new Totp(seed);
+        if (!totp.verify(totpDecryptedValue)) throw new HttpClientErrorException(HttpStatus.UNAUTHORIZED);
+    }
+
+    public static String decrypt(String data, PublicKey publicKey) {
         try {
-            PublicKey pk = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(publicKeyData.getBytes()));
-            rsaKeybytes = pk.getEncoded();
+            Cipher cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
+            cipher.init(Cipher.DECRYPT_MODE, publicKey);
+            return new String(cipher.doFinal(Base64.getDecoder().decode(data)));
+        } catch (NoSuchAlgorithmException | NoSuchPaddingException | BadPaddingException | IllegalBlockSizeException | InvalidKeyException e) {
+            throw new HttpClientErrorException(HttpStatus.BAD_REQUEST, "decryption fail");
+        }
+    }
+
+    private PublicKey checkRSAPublicKeyAndRetrieve(MultipartFile publicKeyData) {
+        PublicKey pk;
+        try {
+            pk = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(Base64.getDecoder().decode(publicKeyData.getBytes())));
         } catch (NoSuchAlgorithmException e) {
             throw new HttpClientErrorException(HttpStatus.NOT_IMPLEMENTED);
         } catch (IOException | InvalidKeySpecException e) {
             throw new HttpClientErrorException(HttpStatus.BAD_REQUEST, "RSA key not viable");
         }
 
-        return rsaKeybytes;
+        return pk;
     }
 }
